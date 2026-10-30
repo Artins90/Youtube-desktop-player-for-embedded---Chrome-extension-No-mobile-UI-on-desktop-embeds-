@@ -18,3 +18,5 @@ Youtube desktop player for embedded/
 ├── content.js
 └── manifest.json
 ```
+
+**Disclaimer: This project is provided “as is,” without guarantees of functionality, support, or future updates. Use it at your own risk. I accept no responsibility for any loss, damage, or issues arising from its use.**
