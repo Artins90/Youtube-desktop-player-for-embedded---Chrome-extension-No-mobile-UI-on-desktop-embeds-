@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Youtube desktop player for embedded",
+  "version": "2.4",
+  "description": "Restores a classic desktop bottom control bar and settings menu on YouTube's embedded player.",
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.youtube.com/embed/*",
+        "*://www.youtube-nocookie.com/embed/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ]
+}
