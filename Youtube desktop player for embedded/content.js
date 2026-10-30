@@ -1,5 +1,3 @@
-// YouTube Embed Controls Restorer v2.4
-
 (() => {
   "use strict";
 
@@ -57,6 +55,7 @@
       [...document.querySelectorAll(POPUP_SEL)].some((el) => el.getClientRects().length > 0);
 
     const showBar = () => {
+      if (typeof setPP === "function") setPP();
       root.classList.add("ytc-show");
       clearTimeout(hideTimer);
       if (video.paused || video.ended) return;
@@ -81,7 +80,23 @@
     });
 
     /* ---------- Click handling: play/pause zone, Stats for nerds, menus ---------- */
+    // Videos that load paused show a preview ("cued" state) with YouTube's red play button. Until the first
+    // start, YouTube's normal play/pause button doesn't exist yet, so that red button is the only way in.
+    const cuedPlayButton = () => {
+      const host = document.querySelector("cued-overlay");
+      if (!host || host.classList.contains("hidden") || host.classList.contains("ytmCuedOverlayHidden")) return null;
+      if (!host.getClientRects().length) return null;
+      const cs = getComputedStyle(host);
+      if (cs.visibility === "hidden" || cs.opacity === "0") return null;
+      return host.querySelector(".ytmCuedOverlayPlayButton, button");
+    };
+
     const togglePlayPause = () => {
+      const cued = cuedPlayButton();
+      if (cued) {
+        cued.click();
+        return;
+      }
       const native = document.querySelector(".player-control-play-pause-icon");
       if (native) native.click();
       else if (video.paused) video.play();
@@ -148,6 +163,15 @@
         return;
       }
 
+      // 3b. Preview not started yet: a click anywhere on it starts the video.
+      const cued = cuedPlayButton();
+      if (cued) {
+        e.stopPropagation();
+        e.preventDefault();
+        cued.click();
+        return;
+      }
+
       // 4. Title band / control band (not a video click): swallow so YouTube's overlay can't toggle either.
       if (!inVideoZone(e.clientY)) {
         e.stopPropagation();
@@ -164,15 +188,16 @@
     /* ---------- Play / Pause Button ---------- */
     const ppBtn = Object.assign(document.createElement("button"), { id: "ytc-pp" });
     const setPP = () => {
-      ppBtn.innerHTML = video.paused ? ICON.play : ICON.pause;
-      ppBtn.title = ppBtn.ariaLabel = video.paused ? "Play" : "Pause";
+      const showPlay = video.paused || !!cuedPlayButton();   // preview counts as "not playing"
+      ppBtn.innerHTML = showPlay ? ICON.play : ICON.pause;
+      ppBtn.title = ppBtn.ariaLabel = showPlay ? "Play" : "Pause";
     };
     setPP();
     ppBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       togglePlayPause();
     });
-    ["play", "pause", "ended"].forEach((t) => video.addEventListener(t, () => { setPP(); showBar(); }));
+    ["play", "playing", "pause", "ended", "loadeddata"].forEach((t) => video.addEventListener(t, () => { setPP(); showBar(); }));
 
     /* ---------- Fullscreen ---------- */
     const toggleFullscreen = () => {
@@ -385,7 +410,7 @@
     }, true);
 
     // After the last tap on a + / - stepper (speed, timers...) close the menu. Touching anything else cancels it.
-    const STEP_CLOSE_MS = 2000;
+    const STEP_CLOSE_MS = 1500;
     const STEP_SEL = ".ytSliderShapeHostIncrementButton";
     const CONFIRM_RE = /^(set|done|ok|save|apply|confirm)\b/i;
     let stepTimer = 0;
