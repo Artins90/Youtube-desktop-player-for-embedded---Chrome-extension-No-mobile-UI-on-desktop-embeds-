@@ -1,0 +1,503 @@
+/* YouTube Embed Controls Restorer v2.4 */
+
+
+html {
+  --ytc-z-title: 2;
+  --ytc-z-controls: 3;
+  --ytc-z-ourbar: 9000;
+  --ytc-z-sheet: 9100;
+  --ytc-z-ctx: 9200;
+}
+
+html.ytc-active {
+  /* Fluid responsive scaling for any embed / Reddit expando size */
+  --ytc-menu-width: clamp(220px, 32vw, 290px);
+  --ytc-row-height: clamp(28px, 6vh, 34px);
+  --ytc-font-title: clamp(11.5px, 2.2vh, 13px);
+  --ytc-font-sub: clamp(10.5px, 2vh, 12px);
+  --ytc-icon-size: clamp(15px, 3vh, 18px);
+}
+
+/* ---------- 1. Hide Unwanted Mobile (Delhi) UI Elements ---------- */
+player-fullscreen-action-menu,
+.fullscreen-controls,
+#player-control-overlay .player-controls-bottom-right,
+#player-control-overlay volume-controls,
+#player-control-overlay .player-middle-controls-prev-next-button,
+#player-control-overlay .player-control-play-pause-icon:not(.endscreen-replay-button),
+#player-control-overlay .player-controls-background-container,
+#player-control-overlay .ytmVideoInfoOverlay {
+  display: none !important;
+}
+.ytmA11yStylesHiddenButton { pointer-events: none; }
+
+/* ---------- 2. Minimalist Top Title & Channel Info Bar ---------- */
+#player-control-overlay .player-controls-top {
+  position: absolute !important;
+  top: 0 !important; left: 0 !important; right: 0 !important; bottom: auto !important;
+  width: 100% !important; height: auto !important;
+  display: flex !important; justify-content: flex-start !important; align-items: flex-start !important;
+  pointer-events: none !important;
+  z-index: var(--ytc-z-title) !important;
+}
+
+/* The bar itself never catches clicks; only the avatar / title / channel link below do. */
+#player-control-overlay .ytwPlayerTopControlsLeftContent {
+  display: flex !important; flex-direction: row !important; align-items: center !important;
+  visibility: visible !important; pointer-events: none !important;
+  position: relative !important;
+  flex: 1 1 auto !important; min-width: 0 !important; max-width: 100% !important;
+  height: auto !important;                       /* no max-height: it used to clip the title */
+  padding: clamp(4px, 1vh, 8px) clamp(8px, 1.5vw, 14px) clamp(6px, 1.4vh, 12px) !important;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%) !important;
+  transition: opacity 0.2s ease !important;
+  box-sizing: border-box !important;
+}
+
+/* Layout: [avatar] [title / channel] in one row */
+#player-control-overlay .ytmVideoInfoHost {
+  display: block !important; flex: 0 1 auto !important; min-width: 0 !important; max-width: 100% !important;
+  padding: 0 !important; margin: 0 !important; overflow: visible !important;
+}
+#player-control-overlay .ytmVideoInfoVideoDetailsContainer {
+  display: flex !important; flex-direction: row !important; align-items: center !important; gap: 8px !important;
+  min-height: 0 !important; min-width: 0 !important; padding: 0 !important; margin: 0 !important;
+}
+#player-control-overlay .ytmVideoInfoChannelContainer {
+  order: -1 !important;                          /* avatar first (it comes second in the markup) */
+  display: flex !important; position: relative !important; align-items: center !important;
+  flex: 0 0 auto !important; height: auto !important; min-width: 0 !important;
+  margin: 0 !important; padding: 0 !important; overflow: visible !important;
+}
+#player-control-overlay .ytmVideoInfoChannelAvatar {
+  position: relative !important;
+  width: clamp(20px, 3.5vh, 26px) !important; height: clamp(20px, 3.5vh, 26px) !important;
+  border-radius: 50% !important; overflow: hidden !important; display: block !important;
+  background: transparent !important; border: none !important; padding: 0 !important; flex-shrink: 0 !important;
+  pointer-events: auto !important;
+}
+#player-control-overlay .ytmVideoInfoChannelLogo {
+  width: 100% !important; height: 100% !important; border-radius: 50% !important;
+  display: block !important; position: static !important; margin: 0 !important; object-fit: cover !important;
+}
+#player-control-overlay .ytmVideoInfoVideoTitleContainer {
+  display: flex !important; flex-direction: column !important;
+  align-items: flex-start !important;            /* links shrink to their text, so they don't cover the whole bar */
+  justify-content: center !important;
+  flex: 0 1 auto !important; min-width: 0 !important; min-height: 0 !important;
+  padding: 0 !important; margin: 0 !important; overflow: hidden !important;
+}
+#player-control-overlay .ytmVideoInfoVideoTitle {
+  font-size: clamp(12px, 2.5vw, 15px) !important; font-weight: 500 !important; line-height: 1.3 !important;
+  color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.9) !important;
+  padding: 0 !important; display: block !important;
+  width: fit-content !important; max-width: 100% !important;
+  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+  pointer-events: auto !important;
+}
+#player-control-overlay .ytmVideoInfoChannelTitle {
+  font-size: clamp(10px, 2vw, 12px) !important; line-height: 1.25 !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+  display: block !important; width: fit-content !important; max-width: 100% !important;
+  white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+  pointer-events: auto !important;
+}
+
+/* Stats for nerds is open: get the title bar out of its way (it would sit on top of the panel) */
+html.ytc-active.ytc-stats #player-control-overlay .ytwPlayerTopControlsLeftContent {
+  opacity: 0 !important; pointer-events: none !important;
+}
+html.ytc-active.ytc-stats #player-control-overlay .ytwPlayerTopControlsLeftContent * { pointer-events: none !important; }
+
+/* ---------- 3. Bottom Controls Bar Positioning & Styling ---------- */
+#player-control-overlay .player-controls-top-right {
+  position: fixed !important;
+  bottom: 0 !important;
+  right: 36px !important;
+  top: auto !important;
+  left: auto !important;
+  height: 38px !important;
+  width: auto !important;
+  display: flex !important;
+  align-items: center !important;
+  pointer-events: auto !important;
+  z-index: var(--ytc-z-controls) !important;
+}
+#player-control-overlay .player-controls-top-right button,
+#player-control-overlay .player-controls-top-right .icon-button,
+#player-control-overlay .player-controls-top-right ytm-closed-captioning-button,
+#player-control-overlay .player-controls-top-right .ytmClosedCaptioningButtonButton {
+  width: 36px !important;
+  height: 36px !important;
+  padding: 6px !important;
+  cursor: pointer !important;
+}
+#player-control-overlay .player-controls-top-right .icon-button.ythd-quality-badge {
+  width: auto !important;
+  padding: 0 8px !important;
+  font: 500 12px Roboto, Arial, sans-serif !important;
+  color: #fff !important;
+  text-shadow: 0 0 2px #000 !important;
+  cursor: pointer !important;
+}
+@media (max-width: 520px) {
+  #player-control-overlay .icon-button.ythd-quality-badge { display: none !important; }
+}
+
+#player-control-overlay .player-controls-bottom-left,
+#player-control-overlay .watch-page-progress-bar {
+  visibility: visible !important;
+  transition: opacity 0.2s;
+  pointer-events: auto !important;
+}
+#player-control-overlay .player-controls-spinner,
+#player-control-overlay .endscreen-replay-button { visibility: visible !important; }
+
+/* Show / hide synchronization */
+html.ytc-active:not(.ytc-show) #player-control-overlay .player-controls-top-right,
+html.ytc-active:not(.ytc-show) #player-control-overlay .player-controls-bottom-left,
+html.ytc-active:not(.ytc-show) #player-control-overlay .watch-page-progress-bar,
+html.ytc-active:not(.ytc-show) #player-control-overlay .ytwPlayerTopControlsLeftContent,
+html.ytc-active:not(.ytc-show) #player-control-overlay .player-controls-background,
+html.ytc-active:not(.ytc-show) :is(#ytc-pp, #ytc-mute, #ytc-vol, #ytc-fs) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+html.ytc-active.ytc-show #player-control-overlay .player-controls-top-right,
+html.ytc-active.ytc-show #player-control-overlay .player-controls-bottom-left,
+html.ytc-active.ytc-show #player-control-overlay .watch-page-progress-bar,
+html.ytc-active.ytc-show #player-control-overlay .ytwPlayerTopControlsLeftContent,
+html.ytc-active.ytc-show #player-control-overlay .player-controls-background {
+  opacity: 1 !important;
+}
+html.ytc-active:not(.ytc-show), html.ytc-active:not(.ytc-show) * { cursor: none !important; }
+
+/* Bottom gradient */
+#player-control-overlay .player-controls-background {
+  background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0)) bottom left / 100% 70px no-repeat !important;
+  pointer-events: none !important;
+  bottom: 0 !important;
+  height: 70px !important;
+}
+
+/* Seekbar / progress bar */
+#player-control-overlay .watch-page-progress-bar {
+  bottom: 28px !important;
+  left: 12px !important;
+  right: 12px !important;
+  height: 20px !important;
+  z-index: var(--ytc-z-controls) !important;
+  cursor: pointer !important;
+}
+
+/* Time display */
+#player-control-overlay .player-controls-bottom.player-controls-bottom-left {
+  bottom: 0 !important;
+  left: clamp(125px, 20vw, 150px) !important;
+  right: auto !important;
+  height: 38px !important;
+  width: auto !important;
+  z-index: var(--ytc-z-controls) !important;
+}
+.ytwPlayerTimeDisplayPill {
+  background: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: auto !important;
+  font-size: 12px !important;
+  text-shadow: 0 0 2px #000;
+}
+
+/* ---------- 4. Custom Player Buttons ---------- */
+#ytc-pp, #ytc-fs, #ytc-mute, #ytc-vol {
+  z-index: var(--ytc-z-ourbar); position: fixed; bottom: 7px;
+  color: white; background: none; border: none; padding: 0; margin: 0;
+  line-height: 1; opacity: .9; transition: opacity .2s;
+  filter: drop-shadow(0 0 2px rgba(0,0,0,.7));
+  cursor: pointer;
+}
+#ytc-pp:hover, #ytc-fs:hover, #ytc-mute:hover { opacity: 1; }
+#ytc-pp { width: 24px; height: 24px; left: 10px; }
+#ytc-mute { width: 24px; height: 24px; left: 40px; }
+#ytc-fs { width: 24px; height: 24px; right: 8px; }
+#ytc-pp svg, #ytc-fs svg, #ytc-mute svg { width: 100%; height: 100%; display: block; }
+
+#ytc-mute.muted::after {
+  position: absolute; left: -1px; right: -1px; top: 50%;
+  transform: rotate(45deg); height: 2px; content: ""; background: white; pointer-events: none;
+}
+
+#ytc-vol { left: 68px; width: clamp(45px, 8vw, 65px); height: 24px; appearance: none; background: transparent; }
+#ytc-vol::-webkit-slider-runnable-track { height: 3px; background: rgba(255,255,255,.6); border-radius: 2px; }
+#ytc-vol::-moz-range-track { height: 3px; background: rgba(255,255,255,.6); border-radius: 2px; }
+#ytc-vol::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4.5px; appearance: none; border-radius: 50%; background: white; }
+#ytc-vol::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: white; border: none; }
+#ytc-vol::-moz-focus-outer { border: 0; }
+
+#ytc-custom-menu {
+  z-index: var(--ytc-z-ctx); position: fixed; display: none; padding: 4px 0;
+  color: white; font-size: 13px; background: #1c1c1c;
+  border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,.8);
+  cursor: default; user-select: none;
+}
+.ytc-menu-item { padding: 8px 16px; }
+.ytc-menu-item:hover { background: rgba(255,255,255,.1); }
+
+/* Stats for nerds: keep it interactive (clicks on its [X] are also forwarded by content.js) */
+.html5-video-info-panel,
+.html5-video-info-panel * { pointer-events: auto !important; }
+.html5-video-info-panel-close { cursor: pointer !important; }
+
+/* ---------- 5. Desktop Settings Popup (Proportionally Scaled) ---------- */
+#bottom-sheet-wrapper bottom-sheet-container {
+  position: fixed !important; inset: 0 !important; z-index: var(--ytc-z-sheet) !important;
+  pointer-events: none !important;               /* only the panel catches clicks; outside clicks close it via content.js */
+}
+#bottom-sheet-wrapper bottom-sheet-container[hidden],
+#bottom-sheet-wrapper bottom-sheet-container[inert] {
+  display: none !important;
+}
+#bottom-sheet-wrapper ytw-scrim,
+#bottom-sheet-wrapper .ytWebScrimHost {
+  background: transparent !important; background-color: transparent !important;
+  pointer-events: none !important;
+}
+
+/* Scaled popup container */
+#bottom-sheet-wrapper bottom-sheet-layout {
+  position: fixed !important;
+  bottom: 44px !important;
+  right: 12px !important;
+  left: auto !important;
+  top: auto !important;
+  width: var(--ytc-menu-width) !important;
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100vh - 54px) !important;
+  z-index: calc(var(--ytc-z-sheet) + 1) !important;
+  pointer-events: auto !important;
+  display: block !important;
+  animation: ytc-popup-in 0.1s ease-out forwards;
+}
+
+@keyframes ytc-popup-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Solid dark card */
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutHost {
+  position: relative !important; width: 100% !important; max-height: inherit !important;
+  background: #1c1c1c !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important; overflow: hidden !important; transform: none !important;
+  padding: 4px 0 !important; box-sizing: border-box !important;
+}
+
+/* Remove the white horizontal line / header artifacts */
+#bottom-sheet-wrapper #bottom-sheet-header,
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutHeaderWrapper,
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutDragLine,
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutHeader,
+#bottom-sheet-wrapper yt-touch-feedback-shape {
+  display: none !important;
+  border: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutHost::before,
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutHost::after,
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutContentWrapper::before,
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutContentWrapper::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Content wrapper */
+#bottom-sheet-wrapper #content-wrapper,
+#bottom-sheet-wrapper .ytSpecBottomSheetLayoutContentWrapper {
+  max-height: min(340px, calc(100vh - 100px)) !important;
+  overflow-y: auto !important; overflow-x: hidden !important;
+  padding: 0 !important; margin: 0 !important;
+  border: none !important;
+  scrollbar-width: thin !important; scrollbar-color: rgba(255, 255, 255, 0.3) transparent !important;
+}
+#bottom-sheet-wrapper::-webkit-scrollbar,
+#bottom-sheet-wrapper *::-webkit-scrollbar { width: 4px !important; }
+#bottom-sheet-wrapper::-webkit-scrollbar-thumb,
+#bottom-sheet-wrapper *::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3) !important; border-radius: 2px !important; }
+
+/* List row layout */
+#bottom-sheet-wrapper yt-list-item-view-model {
+  display: block !important; cursor: pointer !important; user-select: none !important; padding: 0 !important; margin: 0 !important;
+}
+#bottom-sheet-wrapper .ytListItemViewModelLayoutWrapper,
+#bottom-sheet-wrapper .ytListItemViewModelContainer {
+  padding: 0 10px !important;
+  min-height: var(--ytc-row-height) !important;
+  height: var(--ytc-row-height) !important;
+  box-sizing: border-box !important; display: flex !important; align-items: center !important;
+  transition: background-color 0.1s ease !important; background: transparent !important;
+}
+#bottom-sheet-wrapper yt-list-item-view-model:hover .ytListItemViewModelLayoutWrapper,
+#bottom-sheet-wrapper .ytListItemViewModelLayoutWrapper:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+#bottom-sheet-wrapper .ytListItemViewModelMainContainer {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Icon on the left (was align-self:start, which parked it above the text) */
+#bottom-sheet-wrapper .ytListItemViewModelImageContainer,
+#bottom-sheet-wrapper .ytListItemViewModelButtonContainer,
+#bottom-sheet-wrapper .ytListItemViewModelLeading {
+  width: var(--ytc-icon-size) !important;
+  height: var(--ytc-icon-size) !important;
+  min-width: 0 !important;
+  margin: 0 8px 0 0 !important;
+  align-self: center !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 auto !important;
+}
+#bottom-sheet-wrapper .ytListItemViewModelImage,
+#bottom-sheet-wrapper .ytListItemViewModelImage svg,
+#bottom-sheet-wrapper c3-icon {
+  fill: #fff !important; color: #fff !important; width: var(--ytc-icon-size) !important; height: var(--ytc-icon-size) !important;
+  max-height: none !important;
+}
+
+/* Title text (the wrapper is a column flex by default, so 'align-items:center' used to centre the text horizontally) */
+#bottom-sheet-wrapper .ytListItemViewModelTextWrapper,
+#bottom-sheet-wrapper .ytListItemViewModelTitleWrapper,
+#bottom-sheet-wrapper button.ytListItemViewModelButtonOrAnchor {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  background: transparent !important;
+  border: none !important;
+  text-align: left !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: inherit !important;
+  cursor: pointer !important;
+  overflow: hidden !important;
+}
+#bottom-sheet-wrapper button.ytListItemViewModelButtonOrAnchor > div {
+  display: flex !important; align-items: center !important; min-width: 0 !important;
+}
+#bottom-sheet-wrapper .ytListItemViewModelTitle {
+  font-family: Roboto, Arial, sans-serif !important;
+  font-size: var(--ytc-font-title) !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  color: #eee !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Setting value on the right */
+#bottom-sheet-wrapper .ytListItemViewModelSelectionText,
+#bottom-sheet-wrapper .ytListItemViewModelTrailingSelectionText {
+  font-family: Roboto, Arial, sans-serif !important;
+  font-size: var(--ytc-font-sub) !important;
+  font-weight: 400 !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  margin-left: 8px !important;
+  margin-right: 4px !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  text-align: right !important;
+  flex: 0 0 auto !important;
+  max-width: 48% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Chevron */
+#bottom-sheet-wrapper .ytListItemViewModelChevronIcon {
+  width: 14px !important; height: 14px !important;
+  fill: rgba(255, 255, 255, 0.5) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  flex: 0 0 auto !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+#bottom-sheet-wrapper .ytListItemViewModelChevronIcon svg { width: 14px !important; height: 14px !important; fill: currentColor !important; }
+
+/* Submenu Headers & Back Button */
+#bottom-sheet-wrapper yt-panel-header-view-model {
+  display: flex !important; align-items: center !important; padding: 6px 10px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important; color: #fff !important; margin-bottom: 2px !important;
+}
+#bottom-sheet-wrapper .ytPanelHeaderViewModelTitleWrapper { flex: 1 1 auto !important; margin-left: 2px !important; }
+#bottom-sheet-wrapper .ytPanelHeaderViewModelTitleHeader,
+#bottom-sheet-wrapper .ytPanelHeaderViewModelTitle {
+  font-family: Roboto, Arial, sans-serif !important; font-size: var(--ytc-font-title) !important; font-weight: 500 !important; color: #fff !important; margin: 0 !important;
+}
+#bottom-sheet-wrapper .ytPanelHeaderViewModelTrailingButtons { margin-left: auto !important; font-size: var(--ytc-font-sub) !important; color: rgba(255, 255, 255, 0.7) !important; }
+.ytc-back-btn {
+  background: transparent !important; border: none !important; padding: 3px !important; margin-right: 4px !important;
+  cursor: pointer !important; color: #fff !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; border-radius: 50% !important;
+}
+.ytc-back-btn:hover { background: rgba(255, 255, 255, 0.15) !important; }
+.ytc-back-btn svg { width: var(--ytc-icon-size) !important; height: var(--ytc-icon-size) !important; fill: currentColor !important; }
+
+/* Radio Submenus (Quality, Captions) */
+#bottom-sheet-wrapper radio-shape { display: block !important; width: 100% !important; }
+#bottom-sheet-wrapper input.ytRadioShapeInput { display: none !important; }
+#bottom-sheet-wrapper label.ytRadioShapeLabelContainer {
+  display: flex !important; align-items: center !important; width: 100% !important; min-height: var(--ytc-row-height) !important; height: var(--ytc-row-height) !important;
+  padding: 0 10px !important; box-sizing: border-box !important; cursor: pointer !important; color: #fff !important;
+  font-family: Roboto, Arial, sans-serif !important; font-size: var(--ytc-font-title) !important; transition: background-color 0.1s ease !important;
+}
+#bottom-sheet-wrapper label.ytRadioShapeLabelContainer:hover { background-color: rgba(255, 255, 255, 0.1) !important; }
+#bottom-sheet-wrapper .ytRadioShapeCheckIcon,
+#bottom-sheet-wrapper .ytRadioShapeRadio {
+  margin-right: 8px !important; width: var(--ytc-icon-size) !important; height: var(--ytc-icon-size) !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; color: #fff !important; fill: #fff !important;
+}
+#bottom-sheet-wrapper .ytRadioShapeRadio svg { width: var(--ytc-icon-size) !important; height: var(--ytc-icon-size) !important; fill: currentColor !important; }
+
+/* ---------- 6. Playback Speed Submenu ---------- */
+#bottom-sheet-wrapper variable-speed-controller-view-model,
+#bottom-sheet-wrapper variable-speed-controller-view-model * {
+  color: #ffffff !important; fill: #ffffff !important;
+  --yt-spec-text-primary: #ffffff !important;
+  --yt-spec-text-secondary: rgba(255, 255, 255, 0.85) !important;
+  --yt-spec-brand-background-primary: #ffffff !important;
+}
+#bottom-sheet-wrapper .ytwVariableSpeedControllerViewModelPlaybackSpeedDisplay {
+  font-family: Roboto, Arial, sans-serif !important; font-size: 15px !important; font-weight: 700 !important;
+  color: #ffffff !important; text-align: center !important; margin-bottom: 8px !important;
+}
+#bottom-sheet-wrapper .ytHorizontalSliderViewModelHost { display: flex !important; align-items: center !important; justify-content: space-between !important; padding: 2px 8px !important; }
+#bottom-sheet-wrapper variable-speed-controller-view-model button,
+#bottom-sheet-wrapper variable-speed-controller-view-model [role="button"],
+#bottom-sheet-wrapper variable-speed-controller-view-model [role="radio"],
+#bottom-sheet-wrapper variable-speed-controller-view-model .ytSliderShapeHostIncrementButton {
+  color: #ffffff !important; fill: #ffffff !important; background-color: rgba(255, 255, 255, 0.15) !important; border: 1px solid rgba(255, 255, 255, 0.25) !important;
+}
+#bottom-sheet-wrapper variable-speed-controller-view-model button:hover,
+#bottom-sheet-wrapper variable-speed-controller-view-model [role="button"]:hover,
+#bottom-sheet-wrapper variable-speed-controller-view-model .ytSliderShapeHostIncrementButton:hover {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+}
