@@ -35,6 +35,11 @@ player-fullscreen-action-menu,
 }
 .ytmA11yStylesHiddenButton { pointer-events: none; }
 
+/* Ensure full preview overlay displays pointer cursor */
+cued-overlay, ytm-cued-overlay, .ytmCuedOverlayHost, .ytp-cued-thumbnail-overlay, .ytmVideoCoverHost {
+  cursor: pointer !important;
+}
+
 /* ---------- 2. Minimalist Top Title & Channel Info Bar ---------- */
 #player-control-overlay .player-controls-top {
   position: absolute !important;
@@ -156,6 +161,22 @@ html.ytc-active.ytc-stats #player-control-overlay .ytwPlayerTopControlsLeftConte
 }
 #player-control-overlay .player-controls-spinner,
 #player-control-overlay .endscreen-replay-button { visibility: visible !important; }
+
+/* Hide bottom controls completely while initial stopped state thumbnail is displayed */
+html.ytc-cued :is(
+  #ytc-pp,
+  #ytc-mute,
+  #ytc-vol,
+  #ytc-fs,
+  #player-control-overlay .player-controls-top-right,
+  #player-control-overlay .player-controls-bottom-left,
+  #player-control-overlay .watch-page-progress-bar,
+  #player-control-overlay .player-controls-background
+) {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
 
 /* Show / hide synchronization */
 html.ytc-active:not(.ytc-show) #player-control-overlay .player-controls-top-right,
