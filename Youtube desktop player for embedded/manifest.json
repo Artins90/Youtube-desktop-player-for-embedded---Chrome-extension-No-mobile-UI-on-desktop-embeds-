@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Youtube desktop player for embedded",
-  "version": "2.4",
+  "name": "YouTube Embed Controls Restorer",
+  "version": "1.0.2",
   "description": "Restores a classic desktop bottom control bar and settings menu on YouTube's embedded player.",
   "content_scripts": [
     {
