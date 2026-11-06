@@ -1,3 +1,5 @@
+// YouTube Embed Controls Restorer v1.0.2
+
 (() => {
   "use strict";
 
@@ -16,35 +18,92 @@
   };
 
   function start() {
-    const video = document.querySelector("video");
-    if (video) {
-      init(video);
-      return;
-    }
-    const observer = new MutationObserver(() => {
-      const v = document.querySelector("video");
-      if (v) {
-        observer.disconnect();
-        clearTimeout(timeout);
-        init(v);
+    const attach = () => {
+      const video = document.querySelector("video");
+      if (video && document.body) {
+        init(video);
+        return true;
       }
+      return false;
+    };
+
+    if (attach()) return;
+
+    const observer = new MutationObserver(() => {
+      if (attach()) observer.disconnect();
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    const timeout = setTimeout(() => { observer.disconnect(); }, 20000);
   }
 
-  function init(video) {
-    if (document.querySelector(".ytp-play-button")) return;
+  function init(initialVideo) {
+    let video = initialVideo;
+    if (document.querySelector(".ytp-play-button") && !document.querySelector("#player-control-overlay")) return;
     if (document.getElementById("ytc-pp")) return;
 
     const root = document.documentElement;
     root.classList.add("ytc-active", "ytc-show");
 
+    /* ---------- Session & State Tracking ---------- */
+    let started = false;
+
+    const hasSource = () => !!(video && (video.currentSrc || video.src));
+
+    const cuedOverlay = () => {
+      const host = document.querySelector(
+        "cued-overlay, .ytmCuedOverlayHost, .ytp-cued-thumbnail-overlay, .ytmVideoCoverHost"
+      );
+      if (!host) return null;
+      if (host.classList.contains("hidden") || host.classList.contains("ytmCuedOverlayHidden")) return null;
+      if (!host.getClientRects().length) return null;
+      const cs = getComputedStyle(host);
+      if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return null;
+      return host;
+    };
+
+    const cuedPlayButton = () => {
+      const host = cuedOverlay();
+      if (!host) return null;
+      return host.querySelector(".ytmCuedOverlayPlayButton, .ytp-large-play-button, button") || host;
+    };
+
+    const isUnstarted = () => {
+      if (started) return false;
+      if (video && video.currentTime > 0 && !video.paused) {
+        started = true;
+        return false;
+      }
+      return !hasSource() || !!cuedPlayButton();
+    };
+
+    let startPoll = 0;
+    const requestStart = () => {
+      clearInterval(startPoll);
+      let tries = 0;
+      const attempt = () => {
+        refreshVideo();
+        const cued = cuedPlayButton();
+        if (cued) {
+          cued.click();
+          const host = cuedOverlay();
+          if (host && host !== cued) host.click();
+          return true;
+        }
+        if (hasSource()) {
+          if (video.paused || video.ended) video.play().catch(() => {});
+          return true;
+        }
+        return false;
+      };
+      if (attempt()) return;
+      startPoll = setInterval(() => {
+        if (attempt() || ++tries > 40) clearInterval(startPoll);
+      }, 100);
+    };
+
     /* ---------- Auto-hide logic ---------- */
     let hideTimer = 0;
     let overBar = false;
 
-    // An open menu = a visible panel (the empty container is always in the DOM, so don't test that).
     const POPUP_SEL =
       "#bottom-sheet-wrapper bottom-sheet-layout,.dialog-container .dialog,.menu-container .menu-content";
     const KEEP_OPEN =
@@ -54,8 +113,14 @@
     const popupOpen = () =>
       [...document.querySelectorAll(POPUP_SEL)].some((el) => el.getClientRects().length > 0);
 
+    let lastSync = 0;
     const showBar = () => {
-      if (typeof setPP === "function") setPP();
+      const now = performance.now();
+      if (now - lastSync > 150) {
+        lastSync = now;
+        refreshVideo();
+        setPP();
+      }
       root.classList.add("ytc-show");
       clearTimeout(hideTimer);
       if (video.paused || video.ended) return;
@@ -71,7 +136,7 @@
     document.addEventListener("mouseover", (e) => {
       overBar = !!(e.target.closest && e.target.closest(KEEP_OPEN));
     }, { passive: true });
-    
+
     root.addEventListener("mouseleave", () => {
       if (!video.paused && !video.ended && !popupOpen()) {
         clearTimeout(hideTimer);
@@ -79,34 +144,67 @@
       }
     });
 
-    /* ---------- Click handling: play/pause zone, Stats for nerds, menus ---------- */
-    // Videos that load paused show a preview ("cued" state) with YouTube's red play button. Until the first
-    // start, YouTube's normal play/pause button doesn't exist yet, so that red button is the only way in.
-    const cuedPlayButton = () => {
-      const host = document.querySelector("cued-overlay");
-      if (!host || host.classList.contains("hidden") || host.classList.contains("ytmCuedOverlayHidden")) return null;
-      if (!host.getClientRects().length) return null;
-      const cs = getComputedStyle(host);
-      if (cs.visibility === "hidden" || cs.opacity === "0") return null;
-      return host.querySelector(".ytmCuedOverlayPlayButton, button");
-    };
-
+    /* ---------- Play / Pause Engine ---------- */
     const togglePlayPause = () => {
-      const cued = cuedPlayButton();
-      if (cued) {
-        cued.click();
+      refreshVideo();
+
+      if (isUnstarted()) {
+        requestStart();
         return;
       }
-      const native = document.querySelector(".player-control-play-pause-icon");
-      if (native) native.click();
-      else if (video.paused) video.play();
-      else video.pause();
+
+      const v = video;
+      if (v.ended) {
+        const replay = document.querySelector(".endscreen-replay-button, button[aria-label*='Replay' i]");
+        if (replay) {
+          replay.click();
+          return;
+        }
+        v.currentTime = 0;
+        v.play().catch(() => {});
+        setPP();
+        return;
+      }
+
+      if (v.paused) {
+        const p = v.play();
+        if (p && p.catch) {
+          p.catch(() => {
+            const native = document.querySelector(".player-control-play-pause-icon");
+            if (native) native.click();
+          });
+        }
+      } else {
+        v.pause();
+      }
+      setPP();
+    };
+
+    /* ---------- Video Click Simulator (Links Button to Video Surface) ---------- */
+    const triggerVideoClick = () => {
+      const x = Math.round(window.innerWidth / 2);
+      const y = Math.round(window.innerHeight / 2);
+      const target =
+        document.elementFromPoint(x, y) ||
+        document.querySelector("#player-control-overlay") ||
+        document.querySelector(".html5-video-player") ||
+        video;
+
+      if (target) {
+        const opts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y };
+        try { target.dispatchEvent(new PointerEvent("pointerdown", opts)); } catch {}
+        try { target.dispatchEvent(new MouseEvent("mousedown", opts)); } catch {}
+        try { target.dispatchEvent(new PointerEvent("pointerup", opts)); } catch {}
+        try { target.dispatchEvent(new MouseEvent("mouseup", opts)); } catch {}
+        target.dispatchEvent(new MouseEvent("click", opts));
+      } else {
+        togglePlayPause();
+      }
     };
 
     const visibleRect = (el) => (el && el.getClientRects().length ? el.getBoundingClientRect() : null);
     const inRect = (r, x, y) => !!r && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 
-    // Stats for nerds lives under YouTube's overlay, so we track it and forward clicks to its [X].
     const statsPanel = () => {
       const p = document.querySelector(".html5-video-info-panel");
       return p && p.getClientRects().length ? p : null;
@@ -120,8 +218,6 @@
     };
     document.addEventListener("mousemove", syncStats, { passive: true, capture: true });
 
-    // Click-to-play zone: below the title bar, above the seek bar. While the controls are hidden
-    // nothing is drawn, so the whole video counts.
     const inVideoZone = (y) => {
       if (!root.classList.contains("ytc-show")) return true;
       const bar = visibleRect(document.querySelector("#player-control-overlay .watch-page-progress-bar"));
@@ -136,14 +232,14 @@
       "yt-progress-bar, .ytPlayerProgressBarHost, .player-settings-icon, " +
       ".html5-video-info-panel, #bottom-sheet-wrapper, #ytc-custom-menu";
 
-    let suppressNextClick = false;   // set when the press that started this click just closed a menu
+    let suppressNextClick = false;
 
     document.addEventListener("click", (e) => {
       const suppressed = suppressNextClick;
       suppressNextClick = false;
       syncStats();
 
-      // 1. Stats for nerds: if YouTube's overlay is in front of it, forward the close button ourselves.
+      // 1. Stats for nerds close button forwarding
       const stats = statsPanel();
       if (stats && !stats.contains(e.target) && inRect(stats.getBoundingClientRect(), e.clientX, e.clientY)) {
         e.stopPropagation();
@@ -153,33 +249,37 @@
         return;
       }
 
-      // 2. Buttons, links, seek bar, menus: leave to the page.
+      // 2. Buttons, inputs, seek bar, menus: leave to the page
       if (e.target.closest(INTERACTIVE)) return;
 
-      // 3. This click only closed the settings menu: don't also toggle playback.
+      // 3. Settings popup closed
       if (suppressed || popupOpen()) {
         e.stopPropagation();
         e.preventDefault();
         return;
       }
 
-      // 3b. Preview not started yet: a click anywhere on it starts the video.
-      const cued = cuedPlayButton();
-      if (cued) {
-        e.stopPropagation();
-        e.preventDefault();
-        cued.click();
-        return;
+      // 3b. Thumbnail / Preview click (only before first playback)
+      if (isUnstarted()) {
+        const cued = cuedPlayButton();
+        if (cued) {
+          e.stopPropagation();
+          e.preventDefault();
+          cued.click();
+          const host = cuedOverlay();
+          if (host && host !== cued) host.click();
+          return;
+        }
       }
 
-      // 4. Title band / control band (not a video click): swallow so YouTube's overlay can't toggle either.
+      // 4. Click outside active video surface zone
       if (!inVideoZone(e.clientY)) {
         e.stopPropagation();
         e.preventDefault();
         return;
       }
 
-      // 5. Video surface: toggle exactly once (stop YouTube's own handler to avoid a double toggle).
+      // 5. Video surface click
       e.stopPropagation();
       e.preventDefault();
       togglePlayPause();
@@ -187,17 +287,24 @@
 
     /* ---------- Play / Pause Button ---------- */
     const ppBtn = Object.assign(document.createElement("button"), { id: "ytc-pp" });
+    let currentPPState = null;
+
     const setPP = () => {
-      const showPlay = video.paused || !!cuedPlayButton();   // preview counts as "not playing"
+      const showPlay = video.paused || video.ended || isUnstarted();
+      if (currentPPState === showPlay) return;
+      currentPPState = showPlay;
       ppBtn.innerHTML = showPlay ? ICON.play : ICON.pause;
       ppBtn.title = ppBtn.ariaLabel = showPlay ? "Play" : "Pause";
     };
     setPP();
+
     ppBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      togglePlayPause();
+      e.preventDefault();
+      triggerVideoClick();
     });
-    ["play", "playing", "pause", "ended", "loadeddata"].forEach((t) => video.addEventListener(t, () => { setPP(); showBar(); }));
+
+    const onMediaState = () => { setPP(); showBar(); };
 
     /* ---------- Fullscreen ---------- */
     const toggleFullscreen = () => {
@@ -236,7 +343,7 @@
       }
     }, true);
 
-    /* ---------- Mute & Volume (Reaches 100%) ---------- */
+    /* ---------- Mute & Volume ---------- */
     let lastVolume = video.volume || 1;
     let userMuted = false;
 
@@ -299,7 +406,7 @@
       }
     }, true);
 
-    video.addEventListener("volumechange", () => {
+    const onVolumeChange = () => {
       if ((String(video.volume).split(".")[1] || "").length > 2) {
         video.volume = lastVolume;
         return;
@@ -311,7 +418,7 @@
       muteBtn.classList.toggle("muted", video.muted || !video.volume);
       vol.value = String(video.muted ? 0 : video.volume);
       if (video.volume > 0) lastVolume = video.volume;
-    });
+    };
 
     document.body.prepend(fsBtn, vol, muteBtn, ppBtn);
 
@@ -346,7 +453,6 @@
       }
     }, true);
 
-    // Clicking outside or pressing Escape closes the settings menu
     document.addEventListener("pointerdown", (e) => {
       const openSheet = document.querySelector(
         "#bottom-sheet-wrapper bottom-sheet-container:not([hidden]):not([inert])"
@@ -377,8 +483,7 @@
       }
     }, true);
 
-    /* ---------- Settings menu: gear toggles it, +/- steppers auto-close it ---------- */
-    // Closes the menu only if a panel is really visible; returns true if it clicked the close button.
+    /* ---------- Settings Menu ---------- */
     const closeSheet = () => {
       if (!popupOpen()) return false;
       const container = document.querySelector(
@@ -390,8 +495,6 @@
       return true;
     };
 
-    // Gear pressed while the menu is open -> close it (and don't let YouTube re-open it on the same click).
-    // Only real user input counts, so the synthetic gear click used by the submenu Back button still works.
     let swallowGearClick = false;
     document.addEventListener("pointerdown", (e) => {
       swallowGearClick = false;
@@ -403,13 +506,12 @@
         swallowGearClick = false;
         e.stopPropagation();
         e.preventDefault();
-      } else if (e.isTrusted && closeSheet()) {      // keyboard activation of the gear
+      } else if (e.isTrusted && closeSheet()) {
         e.stopPropagation();
         e.preventDefault();
       }
     }, true);
 
-    // After the last tap on a + / - stepper (speed, timers...) close the menu. Touching anything else cancels it.
     const STEP_CLOSE_MS = 1500;
     const STEP_SEL = ".ytSliderShapeHostIncrementButton";
     const CONFIRM_RE = /^(set|done|ok|save|apply|confirm)\b/i;
@@ -493,6 +595,40 @@
     }, true);
     document.addEventListener("pointerdown", (e) => {
       if (!menu.contains(e.target)) toggleContextMenu(false);
+    });
+
+    /* ---------- <video> Binding & Dynamic Resync ---------- */
+    const boundVideos = new WeakSet();
+    const bindVideo = (v) => {
+      if (!v || boundVideos.has(v)) return;
+      boundVideos.add(v);
+      ["play", "playing", "pause", "ended", "loadeddata", "loadedmetadata", "emptied"].forEach((t) =>
+        v.addEventListener(t, (e) => {
+          if (e.type === "play" || e.type === "playing") {
+            started = true;
+          } else if (e.type === "emptied") {
+            started = false;
+          }
+          onMediaState();
+        })
+      );
+      v.addEventListener("volumechange", onVolumeChange);
+    };
+
+    const refreshVideo = () => {
+      const v = document.querySelector("video");
+      if (v && v !== video) {
+        video = v;
+        started = !v.paused && v.currentTime > 0;
+        bindVideo(v);
+        setPP();
+      }
+    };
+    bindVideo(video);
+
+    new MutationObserver(refreshVideo).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
     });
 
     showBar();
