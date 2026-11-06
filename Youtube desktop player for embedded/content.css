@@ -1,6 +1,10 @@
-/* YouTube Embed Controls Restorer v2.4 */
+/* YouTube Embed Controls Restorer v1.0.2 */
 
-
+/* Layer scale (low -> high). Everything below uses these instead of ad-hoc numbers.
+   Inside YouTube's own control overlay:  title bar < bottom controls
+   Above it, in our own layer:            our buttons < settings menu < right-click menu
+   (The Stats-for-nerds panel lives under YouTube's overlay and cannot be raised above it,
+    so the title bar hides itself while stats are open - see html.ytc-stats.) */
 html {
   --ytc-z-title: 2;
   --ytc-z-controls: 3;
@@ -47,7 +51,7 @@ player-fullscreen-action-menu,
   visibility: visible !important; pointer-events: none !important;
   position: relative !important;
   flex: 1 1 auto !important; min-width: 0 !important; max-width: 100% !important;
-  height: auto !important;                       /* no max-height: it used to clip the title */
+  height: auto !important;
   padding: clamp(4px, 1vh, 8px) clamp(8px, 1.5vw, 14px) clamp(6px, 1.4vh, 12px) !important;
   background: linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%) !important;
   transition: opacity 0.2s ease !important;
@@ -64,7 +68,7 @@ player-fullscreen-action-menu,
   min-height: 0 !important; min-width: 0 !important; padding: 0 !important; margin: 0 !important;
 }
 #player-control-overlay .ytmVideoInfoChannelContainer {
-  order: -1 !important;                          /* avatar first (it comes second in the markup) */
+  order: -1 !important;
   display: flex !important; position: relative !important; align-items: center !important;
   flex: 0 0 auto !important; height: auto !important; min-width: 0 !important;
   margin: 0 !important; padding: 0 !important; overflow: visible !important;
@@ -82,7 +86,7 @@ player-fullscreen-action-menu,
 }
 #player-control-overlay .ytmVideoInfoVideoTitleContainer {
   display: flex !important; flex-direction: column !important;
-  align-items: flex-start !important;            /* links shrink to their text, so they don't cover the whole bar */
+  align-items: flex-start !important;
   justify-content: center !important;
   flex: 0 1 auto !important; min-width: 0 !important; min-height: 0 !important;
   padding: 0 !important; margin: 0 !important; overflow: hidden !important;
@@ -103,7 +107,7 @@ player-fullscreen-action-menu,
   pointer-events: auto !important;
 }
 
-/* Stats for nerds is open: get the title bar out of its way (it would sit on top of the panel) */
+/* Stats for nerds is open: get the title bar out of its way */
 html.ytc-active.ytc-stats #player-control-overlay .ytwPlayerTopControlsLeftContent {
   opacity: 0 !important; pointer-events: none !important;
 }
@@ -170,6 +174,13 @@ html.ytc-active.ytc-show #player-control-overlay .ytwPlayerTopControlsLeftConten
 html.ytc-active.ytc-show #player-control-overlay .player-controls-background {
   opacity: 1 !important;
 }
+html.ytc-active.ytc-show :is(#ytc-pp, #ytc-mute, #ytc-vol, #ytc-fs) {
+  opacity: .9 !important;
+  pointer-events: auto !important;
+}
+html.ytc-active.ytc-show :is(#ytc-pp:hover, #ytc-fs:hover, #ytc-mute:hover) {
+  opacity: 1 !important;
+}
 html.ytc-active:not(.ytc-show), html.ytc-active:not(.ytc-show) * { cursor: none !important; }
 
 /* Bottom gradient */
@@ -215,7 +226,14 @@ html.ytc-active:not(.ytc-show), html.ytc-active:not(.ytc-show) * { cursor: none 
   line-height: 1; opacity: .9; transition: opacity .2s;
   filter: drop-shadow(0 0 2px rgba(0,0,0,.7));
   cursor: pointer;
+  pointer-events: auto !important;
 }
+
+/* Prevent inner SVG/path tags from capturing clicks or interfering with events */
+#ytc-pp *, #ytc-fs *, #ytc-mute * {
+  pointer-events: none !important;
+}
+
 #ytc-pp:hover, #ytc-fs:hover, #ytc-mute:hover { opacity: 1; }
 #ytc-pp { width: 24px; height: 24px; left: 10px; }
 #ytc-mute { width: 24px; height: 24px; left: 40px; }
@@ -243,7 +261,7 @@ html.ytc-active:not(.ytc-show), html.ytc-active:not(.ytc-show) * { cursor: none 
 .ytc-menu-item { padding: 8px 16px; }
 .ytc-menu-item:hover { background: rgba(255,255,255,.1); }
 
-/* Stats for nerds: keep it interactive (clicks on its [X] are also forwarded by content.js) */
+/* Stats for nerds: keep it interactive */
 .html5-video-info-panel,
 .html5-video-info-panel * { pointer-events: auto !important; }
 .html5-video-info-panel-close { cursor: pointer !important; }
@@ -251,7 +269,7 @@ html.ytc-active:not(.ytc-show), html.ytc-active:not(.ytc-show) * { cursor: none 
 /* ---------- 5. Desktop Settings Popup (Proportionally Scaled) ---------- */
 #bottom-sheet-wrapper bottom-sheet-container {
   position: fixed !important; inset: 0 !important; z-index: var(--ytc-z-sheet) !important;
-  pointer-events: none !important;               /* only the panel catches clicks; outside clicks close it via content.js */
+  pointer-events: none !important;
 }
 #bottom-sheet-wrapper bottom-sheet-container[hidden],
 #bottom-sheet-wrapper bottom-sheet-container[inert] {
@@ -358,7 +376,7 @@ html.ytc-active:not(.ytc-show), html.ytc-active:not(.ytc-show) * { cursor: none 
   overflow: hidden !important;
 }
 
-/* Icon on the left (was align-self:start, which parked it above the text) */
+/* Icon on the left */
 #bottom-sheet-wrapper .ytListItemViewModelImageContainer,
 #bottom-sheet-wrapper .ytListItemViewModelButtonContainer,
 #bottom-sheet-wrapper .ytListItemViewModelLeading {
@@ -379,7 +397,7 @@ html.ytc-active:not(.ytc-show), html.ytc-active:not(.ytc-show) * { cursor: none 
   max-height: none !important;
 }
 
-/* Title text (the wrapper is a column flex by default, so 'align-items:center' used to centre the text horizontally) */
+/* Title text */
 #bottom-sheet-wrapper .ytListItemViewModelTextWrapper,
 #bottom-sheet-wrapper .ytListItemViewModelTitleWrapper,
 #bottom-sheet-wrapper button.ytListItemViewModelButtonOrAnchor {
