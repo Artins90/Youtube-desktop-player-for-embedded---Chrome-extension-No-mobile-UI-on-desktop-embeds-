@@ -46,58 +46,17 @@
     /* ---------- Session & State Tracking ---------- */
     let started = false;
 
-    const hasSource = () => !!(video && (video.currentSrc || video.src));
-
-    const cuedOverlay = () => {
-      const host = document.querySelector(
-        "cued-overlay, .ytmCuedOverlayHost, .ytp-cued-thumbnail-overlay, .ytmVideoCoverHost"
-      );
-      if (!host) return null;
-      if (host.classList.contains("hidden") || host.classList.contains("ytmCuedOverlayHidden")) return null;
-      if (!host.getClientRects().length) return null;
-      const cs = getComputedStyle(host);
-      if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return null;
-      return host;
-    };
-
-    const cuedPlayButton = () => {
-      const host = cuedOverlay();
-      if (!host) return null;
-      return host.querySelector(".ytmCuedOverlayPlayButton, .ytp-large-play-button, button") || host;
-    };
-
     const isUnstarted = () => {
       if (started) return false;
       if (video && video.currentTime > 0 && !video.paused) {
         started = true;
         return false;
       }
-      return !hasSource() || !!cuedPlayButton();
+      return !started;
     };
 
-    let startPoll = 0;
-    const requestStart = () => {
-      clearInterval(startPoll);
-      let tries = 0;
-      const attempt = () => {
-        refreshVideo();
-        const cued = cuedPlayButton();
-        if (cued) {
-          cued.click();
-          const host = cuedOverlay();
-          if (host && host !== cued) host.click();
-          return true;
-        }
-        if (hasSource()) {
-          if (video.paused || video.ended) video.play().catch(() => {});
-          return true;
-        }
-        return false;
-      };
-      if (attempt()) return;
-      startPoll = setInterval(() => {
-        if (attempt() || ++tries > 40) clearInterval(startPoll);
-      }, 100);
+    const syncCued = () => {
+      root.classList.toggle("ytc-cued", isUnstarted());
     };
 
     /* ---------- Auto-hide logic ---------- */
@@ -119,6 +78,7 @@
       if (now - lastSync > 150) {
         lastSync = now;
         refreshVideo();
+        syncCued();
         setPP();
       }
       root.classList.add("ytc-show");
@@ -144,12 +104,63 @@
       }
     });
 
+    /* ---------- Video Click & Preview Start Simulators ---------- */
+    const triggerVideoClick = () => {
+      const x = Math.round(window.innerWidth / 2);
+      const y = Math.round(window.innerHeight / 2);
+      const target =
+        document.elementFromPoint(x, y) ||
+        document.querySelector("#player-control-overlay") ||
+        document.querySelector(".html5-video-player") ||
+        video;
+
+      if (target) {
+        const opts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y };
+        try { target.dispatchEvent(new PointerEvent("pointerdown", opts)); } catch {}
+        try { target.dispatchEvent(new MouseEvent("mousedown", opts)); } catch {}
+        try { target.dispatchEvent(new PointerEvent("pointerup", opts)); } catch {}
+        try { target.dispatchEvent(new MouseEvent("mouseup", opts)); } catch {}
+        target.dispatchEvent(new MouseEvent("click", opts));
+      } else {
+        togglePlayPause();
+      }
+    };
+
+    const triggerCuedStart = () => {
+      started = true;
+      syncCued();
+
+      // 1. Dispatch full pointer sequence directly on the large center play button if present
+      const btn = document.querySelector(
+        ".ytmCuedOverlayPlayButton, .ytp-large-play-button, button.ytmCuedOverlayPlayButton, cued-overlay button, ytm-cued-overlay button, .ytmCuedOverlayHost button, .ytp-cued-thumbnail-overlay button"
+      );
+      if (btn) {
+        const rect = btn.getBoundingClientRect();
+        const cx = rect.width ? Math.round(rect.left + rect.width / 2) : Math.round(window.innerWidth / 2);
+        const cy = rect.height ? Math.round(rect.top + rect.height / 2) : Math.round(window.innerHeight / 2);
+        const opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy };
+        try { btn.dispatchEvent(new PointerEvent("pointerdown", opts)); } catch {}
+        try { btn.dispatchEvent(new MouseEvent("mousedown", opts)); } catch {}
+        try { btn.dispatchEvent(new PointerEvent("pointerup", opts)); } catch {}
+        try { btn.dispatchEvent(new MouseEvent("mouseup", opts)); } catch {}
+        btn.click();
+      }
+
+      // 2. Also simulate center video click
+      triggerVideoClick();
+
+      // 3. Fallback direct video play
+      if (video && (video.paused || video.ended)) {
+        video.play().catch(() => {});
+      }
+    };
+
     /* ---------- Play / Pause Engine ---------- */
     const togglePlayPause = () => {
       refreshVideo();
 
       if (isUnstarted()) {
-        requestStart();
+        triggerCuedStart();
         return;
       }
 
@@ -178,28 +189,6 @@
         v.pause();
       }
       setPP();
-    };
-
-    /* ---------- Video Click Simulator (Links Button to Video Surface) ---------- */
-    const triggerVideoClick = () => {
-      const x = Math.round(window.innerWidth / 2);
-      const y = Math.round(window.innerHeight / 2);
-      const target =
-        document.elementFromPoint(x, y) ||
-        document.querySelector("#player-control-overlay") ||
-        document.querySelector(".html5-video-player") ||
-        video;
-
-      if (target) {
-        const opts = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y };
-        try { target.dispatchEvent(new PointerEvent("pointerdown", opts)); } catch {}
-        try { target.dispatchEvent(new MouseEvent("mousedown", opts)); } catch {}
-        try { target.dispatchEvent(new PointerEvent("pointerup", opts)); } catch {}
-        try { target.dispatchEvent(new MouseEvent("mouseup", opts)); } catch {}
-        target.dispatchEvent(new MouseEvent("click", opts));
-      } else {
-        togglePlayPause();
-      }
     };
 
     const visibleRect = (el) => (el && el.getClientRects().length ? el.getBoundingClientRect() : null);
@@ -249,7 +238,24 @@
         return;
       }
 
-      // 2. Buttons, inputs, seek bar, menus: leave to the page
+      // ---------- PREVIEW MODE CLICK HANDLER ----------
+      if (isUnstarted()) {
+        // Allow title / channel external links to open
+        if (e.target.closest("a")) {
+          return;
+        }
+        // Let YouTube's native center button handler run if clicked directly
+        if (e.target.closest(".ytmCuedOverlayPlayButton, .ytp-large-play-button")) {
+          return;
+        }
+        // Clicking ANYWHERE else on the preview area initiates playback
+        e.stopPropagation();
+        e.preventDefault();
+        triggerCuedStart();
+        return;
+      }
+
+      // 2. Active playback: buttons, inputs, seek bar, menus leave to page
       if (e.target.closest(INTERACTIVE)) return;
 
       // 3. Settings popup closed
@@ -259,19 +265,6 @@
         return;
       }
 
-      // 3b. Thumbnail / Preview click (only before first playback)
-      if (isUnstarted()) {
-        const cued = cuedPlayButton();
-        if (cued) {
-          e.stopPropagation();
-          e.preventDefault();
-          cued.click();
-          const host = cuedOverlay();
-          if (host && host !== cued) host.click();
-          return;
-        }
-      }
-
       // 4. Click outside active video surface zone
       if (!inVideoZone(e.clientY)) {
         e.stopPropagation();
@@ -279,7 +272,7 @@
         return;
       }
 
-      // 5. Video surface click
+      // 5. Video surface click during active session
       e.stopPropagation();
       e.preventDefault();
       togglePlayPause();
@@ -301,10 +294,18 @@
     ppBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
-      triggerVideoClick();
+      if (isUnstarted()) {
+        triggerCuedStart();
+      } else {
+        triggerVideoClick();
+      }
     });
 
-    const onMediaState = () => { setPP(); showBar(); };
+    const onMediaState = () => {
+      syncCued();
+      setPP();
+      showBar();
+    };
 
     /* ---------- Fullscreen ---------- */
     const toggleFullscreen = () => {
@@ -621,6 +622,7 @@
         video = v;
         started = !v.paused && v.currentTime > 0;
         bindVideo(v);
+        syncCued();
         setPP();
       }
     };
@@ -631,6 +633,7 @@
       subtree: true,
     });
 
+    syncCued();
     showBar();
   }
 
